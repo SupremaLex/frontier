@@ -67,7 +67,7 @@ mod tests;
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, Pays, PostDispatchInfo},
 	traits::{
-		tokens::fungible::Inspect, Currency, ExistenceRequirement, FindAuthor, Get, Imbalance,
+		tokens::fungible::Inspect, Contains, Currency, ExistenceRequirement, FindAuthor, Get, Imbalance,
 		OnUnbalanced, SignedImbalance, WithdrawReasons,
 	},
 	weights::Weight,
@@ -106,6 +106,8 @@ pub mod pallet {
 	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
+
+	type ContractMethod = (H160, [u8; 4]);
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config + pallet_timestamp::Config {
@@ -150,6 +152,8 @@ pub mod pallet {
 
 		/// Find author for the current block.
 		type FindAuthor: FindAuthor<H160>;
+
+		type FreeCalls: Contains<ContractMethod>;
 
 		/// EVM config used in the module.
 		fn config() -> &'static EvmConfig {
@@ -198,6 +202,16 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::CallOrigin::ensure_address_origin(&source, origin)?;
 
+			let mut max_fee_per_gas = Some(max_fee_per_gas);
+			let mut max_priority_fee_per_gas = max_priority_fee_per_gas;
+			if let Some(selector) = Self::try_get_selector(&input) {
+				let contract_method = (target, selector);
+				if T::FreeCalls::contains(&contract_method) {
+					max_fee_per_gas = None;
+					max_priority_fee_per_gas = None;
+				}
+			};
+
 			let is_transactional = true;
 			let validate = true;
 			let info = match T::Runner::call(
@@ -206,7 +220,7 @@ pub mod pallet {
 				input,
 				value,
 				gas_limit,
-				Some(max_fee_per_gas),
+				max_fee_per_gas,
 				max_priority_fee_per_gas,
 				nonce,
 				access_list,
@@ -725,6 +739,10 @@ impl<T: Config> Pallet<T> {
 		let pre_runtime_digests = digest.logs.iter().filter_map(|d| d.as_pre_runtime());
 
 		T::FindAuthor::find_author(pre_runtime_digests).unwrap_or_default()
+	}
+
+	pub fn try_get_selector(input: &[u8]) -> Option<[u8; 4]> {
+		input.try_into().map_or_else(|_| None, |value| Some(value))
 	}
 }
 

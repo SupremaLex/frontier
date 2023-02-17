@@ -19,7 +19,7 @@
 
 use frame_support::{
 	parameter_types,
-	traits::{ConstU32, FindAuthor},
+	traits::{ConstU32, FindAuthor, Nothing},
 	weights::Weight,
 };
 use sp_core::{H160, H256, U256};
@@ -146,4 +146,5 @@ impl crate::Config for Test {
 	type Runner = crate::runner::stack::Runner<Self>;
 	type OnChargeTransaction = ();
 	type FindAuthor = FindAuthorTruncated;
+	type FreeCalls = Nothing;
 }
