@@ -43,7 +43,7 @@ use frame_support::{
 	codec::{Decode, Encode, MaxEncodedLen},
 	dispatch::{DispatchInfo, DispatchResultWithPostInfo, Pays, PostDispatchInfo},
 	scale_info::TypeInfo,
-	traits::{EnsureOrigin, Get, PalletInfoAccess},
+	traits::{Contains, EnsureOrigin, Get, PalletInfoAccess},
 	weights::Weight,
 };
 use frame_system::{pallet_prelude::OriginFor, CheckWeight, WeightInfo};
@@ -514,6 +514,14 @@ impl<T: Config> Pallet<T> {
 		source: H160,
 		transaction: Transaction,
 	) -> DispatchResultWithPostInfo {
+
+		// Replace validated transaction with zero gas fee transaction. @Horacio
+		let transaction = if Self::is_free_call(&transaction) {
+			Self::create_free_call(transaction)
+		} else {
+			transaction
+		};
+
 		let (to, _, info) = Self::execute(source, &transaction, None)?;
 
 		let pending = Pending::<T>::get();
@@ -804,6 +812,47 @@ impl<T: Config> Pallet<T> {
 			);
 		}
 		weight
+	}
+
+	pub fn create_free_call(transaction: Transaction) -> Transaction {
+		match transaction {
+			Transaction::Legacy(t) => Transaction::Legacy(ethereum::LegacyTransaction { gas_price: U256::zero(), ..t }),
+			Transaction::EIP1559(t) => Transaction::EIP1559(ethereum::EIP1559Transaction {
+				max_priority_fee_per_gas: U256::zero(), max_fee_per_gas: U256::zero(), ..t}),
+			Transaction::EIP2930(t) => Transaction::EIP2930(ethereum::EIP2930Transaction {gas_price: U256::zero(), ..t}),
+		}
+	}
+
+	pub fn is_free_call(transaction: &Transaction) -> bool {
+		if let Some(addr) = Self::try_get_contract_address(transaction) {
+			if let Some(selector) = Self::try_get_selector(transaction) {
+				return <T as pallet_evm::Config>::FreeCalls::contains(&(addr, selector));
+			}
+		}
+		false
+	}
+
+	pub fn try_get_contract_address(transaction: &Transaction) -> Option<H160> {
+		let action = match transaction {
+			Transaction::Legacy(t) => t.action,
+			Transaction::EIP1559(t) => t.action,
+			Transaction::EIP2930(t) => t.action,
+		};
+		match action {
+			TransactionAction::Call(addr) => Some(addr),
+			_ => None
+		}
+	}
+
+	pub fn try_get_selector(transaction: &Transaction) -> Option<[u8; 4]> {
+		let input = match transaction {
+			Transaction::Legacy(t) => &t.input,
+			Transaction::EIP1559(t) => &t.input,
+			Transaction::EIP2930(t) => &t.input,
+		};
+		input.as_slice()
+		.try_into()
+		.map_or_else(|_| None, |value| Some(value))
 	}
 }
 
