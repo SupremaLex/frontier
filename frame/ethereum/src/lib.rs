@@ -850,9 +850,13 @@ impl<T: Config> Pallet<T> {
 			Transaction::EIP1559(t) => &t.input,
 			Transaction::EIP2930(t) => &t.input,
 		};
-		input.as_slice()
-		.try_into()
-		.map_or_else(|_| None, |value| Some(value))
+		if input.len() >= 4 {
+			input.as_slice()[..4]
+			.try_into()
+			.map_or_else(|_| None, |value| Some(value))
+		} else {
+			None
+		}
 	}
 }
 
