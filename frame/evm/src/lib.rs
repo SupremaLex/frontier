@@ -67,7 +67,7 @@ mod tests;
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, Pays, PostDispatchInfo},
 	traits::{
-		tokens::fungible::Inspect, Contains, Currency, ExistenceRequirement, FindAuthor, Get, Imbalance,
+		tokens::fungible::Inspect, Currency, ExistenceRequirement, FindAuthor, Get, Imbalance,
 		OnUnbalanced, SignedImbalance, WithdrawReasons,
 	},
 	weights::Weight,
@@ -86,7 +86,7 @@ pub use evm::{
 #[cfg(feature = "std")]
 use fp_evm::GenesisAccount;
 pub use fp_evm::{
-	Account, CallInfo, CreateInfo, ExecutionInfo, FeeCalculator, InvalidEvmTransactionError,
+	Account, CallInfo, CreateInfo, ExecutionInfo, FeeCalculator, EvmFreeCall, InvalidEvmTransactionError,
 	LinearCostPrecompile, Log, Precompile, PrecompileFailure, PrecompileHandle, PrecompileOutput,
 	PrecompileResult, PrecompileSet, Vicinity,
 };
@@ -106,8 +106,6 @@ pub mod pallet {
 	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
-
-	type ContractMethod = (H160, [u8; 4]);
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config + pallet_timestamp::Config {
@@ -153,7 +151,7 @@ pub mod pallet {
 		/// Find author for the current block.
 		type FindAuthor: FindAuthor<H160>;
 
-		type FreeCalls: Contains<ContractMethod>;
+		type FreeCalls: EvmFreeCall<H160>;
 
 		/// EVM config used in the module.
 		fn config() -> &'static EvmConfig {
@@ -204,13 +202,11 @@ pub mod pallet {
 
 			let mut max_fee_per_gas = Some(max_fee_per_gas);
 			let mut max_priority_fee_per_gas = max_priority_fee_per_gas;
-			if let Some(selector) = Self::try_get_selector(&input) {
-				let contract_method = (target, selector);
-				if T::FreeCalls::contains(&contract_method) {
-					max_fee_per_gas = None;
-					max_priority_fee_per_gas = None;
-				}
-			};
+
+			if T::FreeCalls::can_send_free_call(&source, &target, &input[..] ) {
+				max_fee_per_gas = None;
+				max_priority_fee_per_gas = None;
+			}
 
 			let is_transactional = true;
 			let validate = true;
@@ -230,6 +226,7 @@ pub mod pallet {
 			) {
 				Ok(info) => info,
 				Err(e) => {
+					T::FreeCalls::on_sent_free_call(&source);
 					return Err(DispatchErrorWithPostInfo {
 						post_info: PostDispatchInfo {
 							actual_weight: Some(e.weight),
@@ -249,6 +246,7 @@ pub mod pallet {
 				}
 			};
 
+			T::FreeCalls::on_sent_free_call(&source);
 			Ok(PostDispatchInfo {
 				actual_weight: Some(T::GasWeightMapping::gas_to_weight(
 					info.used_gas.unique_saturated_into(),
@@ -739,10 +737,6 @@ impl<T: Config> Pallet<T> {
 		let pre_runtime_digests = digest.logs.iter().filter_map(|d| d.as_pre_runtime());
 
 		T::FindAuthor::find_author(pre_runtime_digests).unwrap_or_default()
-	}
-
-	pub fn try_get_selector(input: &[u8]) -> Option<[u8; 4]> {
-		input.try_into().map_or_else(|_| None, |value| Some(value))
 	}
 }
 

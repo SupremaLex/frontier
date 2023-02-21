@@ -36,14 +36,14 @@ use fp_ethereum::{
 	TransactionData, TransactionValidationError, ValidatedTransaction as ValidatedTransactionT,
 };
 use fp_evm::{
-	CallOrCreateInfo, CheckEvmTransaction, CheckEvmTransactionConfig, InvalidEvmTransactionError,
+	CallOrCreateInfo, CheckEvmTransaction, CheckEvmTransactionConfig, InvalidEvmTransactionError, EvmFreeCall,
 };
 use fp_storage::{EthereumStorageSchema, PALLET_ETHEREUM_SCHEMA};
 use frame_support::{
 	codec::{Decode, Encode, MaxEncodedLen},
 	dispatch::{DispatchInfo, DispatchResultWithPostInfo, Pays, PostDispatchInfo},
 	scale_info::TypeInfo,
-	traits::{Contains, EnsureOrigin, Get, PalletInfoAccess},
+	traits::{EnsureOrigin, Get, PalletInfoAccess},
 	weights::Weight,
 };
 use frame_system::{pallet_prelude::OriginFor, CheckWeight, WeightInfo};
@@ -516,7 +516,7 @@ impl<T: Config> Pallet<T> {
 	) -> DispatchResultWithPostInfo {
 
 		// Replace validated transaction with zero gas fee transaction. @Horacio
-		let transaction = if Self::is_free_call(&transaction) {
+		let transaction = if Self::is_free_call(&source, &transaction) {
 			Self::create_free_call(transaction)
 		} else {
 			transaction
@@ -613,7 +613,8 @@ impl<T: Config> Pallet<T> {
 			transaction_hash,
 			exit_reason: reason,
 		});
-
+		
+		<T as pallet_evm::Config>::FreeCalls::on_sent_free_call(&source);
 		Ok(PostDispatchInfo {
 			actual_weight: Some(T::GasWeightMapping::gas_to_weight(
 				used_gas.unique_saturated_into(),
@@ -823,11 +824,10 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	pub fn is_free_call(transaction: &Transaction) -> bool {
-		if let Some(addr) = Self::try_get_contract_address(transaction) {
-			if let Some(selector) = Self::try_get_selector(transaction) {
-				return <T as pallet_evm::Config>::FreeCalls::contains(&(addr, selector));
-			}
+	pub fn is_free_call(source: &H160, transaction: &Transaction) -> bool {
+		if let Some(target) = Self::try_get_contract_address(transaction) {
+			let input = Self::get_input(transaction);
+			return <T as pallet_evm::Config>::FreeCalls::can_send_free_call(source, &target, input);
 		}
 		false
 	}
@@ -844,18 +844,11 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	pub fn try_get_selector(transaction: &Transaction) -> Option<[u8; 4]> {
-		let input = match transaction {
+	pub fn get_input(transaction: &Transaction) -> &[u8] {
+		match transaction {
 			Transaction::Legacy(t) => &t.input,
 			Transaction::EIP1559(t) => &t.input,
 			Transaction::EIP2930(t) => &t.input,
-		};
-		if input.len() >= 4 {
-			input.as_slice()[..4]
-			.try_into()
-			.map_or_else(|_| None, |value| Some(value))
-		} else {
-			None
 		}
 	}
 }

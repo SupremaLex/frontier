@@ -98,3 +98,18 @@ impl FeeCalculator for () {
 		(U256::zero(), Weight::zero())
 	}
 }
+
+pub trait EvmFreeCall<AccountId> {
+	fn can_send_free_call(source: &AccountId, target: &AccountId, selector: &[u8]) -> bool;
+	fn on_sent_free_call(source: &AccountId);
+}
+
+impl<AccountId> EvmFreeCall<AccountId> for () {
+	fn can_send_free_call(_source: &AccountId, _target: &AccountId, _selector: &[u8]) -> bool {
+		false
+	}
+
+	fn on_sent_free_call(_source: &AccountId) {
+
+	}
+}
