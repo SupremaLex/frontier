@@ -151,7 +151,7 @@ pub mod pallet {
 		/// Find author for the current block.
 		type FindAuthor: FindAuthor<H160>;
 
-		type FreeCalls: EvmFreeCall<H160>;
+		type FreeCalls: EvmFreeCall;
 
 		/// EVM config used in the module.
 		fn config() -> &'static EvmConfig {
