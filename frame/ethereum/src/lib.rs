@@ -634,8 +634,8 @@ impl<T: Config> Pallet<T> {
 			input,
 			value,
 			gas_limit,
-			mut max_fee_per_gas,
-			mut max_priority_fee_per_gas,
+			max_fee_per_gas,
+			max_priority_fee_per_gas,
 			nonce,
 			action,
 			access_list,
@@ -689,12 +689,6 @@ impl<T: Config> Pallet<T> {
 				}
 			}
 		};
-
-		// Set gas fee to zero, if this call is free. @Horacio
-		if Self::is_free_call(&from, &transaction) {
-			max_fee_per_gas = Some(U256::zero());
-			max_priority_fee_per_gas = Some(U256::zero());
-		}
 
 		let is_transactional = true;
 		let validate = false;
@@ -769,7 +763,11 @@ impl<T: Config> Pallet<T> {
 	) -> Result<(), TransactionValidityError> {
 		let transaction_data: TransactionData = transaction.into();
 
-		let (base_fee, _) = T::FeeCalculator::min_gas_price();
+		let (mut base_fee, _) = T::FeeCalculator::min_gas_price();
+		// Set base fee to zero to pass validation of transaction in pool. @Horacio
+		if Self::is_free_call(&origin, &transaction) {
+			base_fee = U256::zero();
+		}
 		let (who, _) = pallet_evm::Pallet::<T>::account_basic(&origin);
 
 		let _ = CheckEvmTransaction::<InvalidTransactionWrapper>::new(
