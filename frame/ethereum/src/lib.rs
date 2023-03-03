@@ -453,7 +453,11 @@ impl<T: Config> Pallet<T> {
 		let transaction_data: TransactionData = transaction.into();
 		let transaction_nonce = transaction_data.nonce;
 
-		let (base_fee, _) = T::FeeCalculator::min_gas_price();
+		let (mut base_fee, _) = T::FeeCalculator::min_gas_price();
+		// Set base fee to zero to pass validation of transaction in pool. @Horacio
+		if Self::is_free_call(&origin, &transaction) {
+			base_fee = U256::zero();
+		}
 		let (who, _) = pallet_evm::Pallet::<T>::account_basic(&origin);
 
 		let _ = CheckEvmTransaction::<InvalidTransactionWrapper>::new(
