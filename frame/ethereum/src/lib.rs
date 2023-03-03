@@ -495,9 +495,12 @@ impl<T: Config> Pallet<T> {
 				.min(max_priority_fee_per_gas)
 				.unique_saturated_into(),
 			// Unreachable because already validated. Gracefully handle.
-			_ => return Err(InvalidTransaction::Payment.into()),
+			_ => return {
+				panic!("InvalidTransaction::Payment");
+				Err(InvalidTransaction::Payment.into())
+			}
 		};
-
+		
 		// The tag provides and requires must be filled correctly according to the nonce.
 		let mut builder = ValidTransactionBuilder::default()
 			.and_provides((origin, transaction_nonce))
@@ -886,12 +889,14 @@ impl From<InvalidEvmTransactionError> for InvalidTransactionWrapper {
 				InvalidTransaction::Custom(TransactionValidationError::GasLimitTooHigh as u8),
 			),
 			InvalidEvmTransactionError::GasPriceTooLow => {
+				panic!("InvalidEvmTransactionError::GasPriceTooLow");
 				InvalidTransactionWrapper(InvalidTransaction::Payment)
 			}
 			InvalidEvmTransactionError::PriorityFeeTooHigh => InvalidTransactionWrapper(
 				InvalidTransaction::Custom(TransactionValidationError::MaxFeePerGasTooLow as u8),
 			),
 			InvalidEvmTransactionError::BalanceTooLow => {
+				panic!("InvalidEvmTransactionError::BalanceTooLow");
 				InvalidTransactionWrapper(InvalidTransaction::Payment)
 			}
 			InvalidEvmTransactionError::TxNonceTooLow => {
@@ -901,6 +906,7 @@ impl From<InvalidEvmTransactionError> for InvalidTransactionWrapper {
 				InvalidTransactionWrapper(InvalidTransaction::Future)
 			}
 			InvalidEvmTransactionError::InvalidPaymentInput => {
+				panic!("InvalidEvmTransactionError::InvalidPaymentInput");
 				InvalidTransactionWrapper(InvalidTransaction::Payment)
 			}
 			InvalidEvmTransactionError::InvalidChainId => InvalidTransactionWrapper(
