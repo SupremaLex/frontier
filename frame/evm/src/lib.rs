@@ -200,13 +200,9 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::CallOrigin::ensure_address_origin(&source, origin)?;
 
-			let mut max_fee_per_gas = Some(max_fee_per_gas);
-			let mut max_priority_fee_per_gas = max_priority_fee_per_gas;
-
-			if T::FreeCalls::can_send_free_call(&source, &target, &input[..] ) {
-				max_fee_per_gas = None;
-				max_priority_fee_per_gas = None;
-			}
+			let max_fee_per_gas = Some(max_fee_per_gas);
+			let max_priority_fee_per_gas = max_priority_fee_per_gas;
+			let is_free = T::FreeCalls::can_send_free_call(&source, &target, &input[..] );
 
 			let is_transactional = true;
 			let validate = true;
@@ -222,11 +218,14 @@ pub mod pallet {
 				access_list,
 				is_transactional,
 				validate,
+				is_free,
 				T::config(),
 			) {
 				Ok(info) => info,
 				Err(e) => {
-					T::FreeCalls::on_sent_free_call(&source);
+					if is_free {
+						T::FreeCalls::on_sent_free_call(&source);
+					}
 					return Err(DispatchErrorWithPostInfo {
 						post_info: PostDispatchInfo {
 							actual_weight: Some(e.weight),
@@ -246,7 +245,9 @@ pub mod pallet {
 				}
 			};
 
-			T::FreeCalls::on_sent_free_call(&source);
+			if is_free {
+				T::FreeCalls::on_sent_free_call(&source);
+			}
 			Ok(PostDispatchInfo {
 				actual_weight: Some(T::GasWeightMapping::gas_to_weight(
 					info.used_gas.unique_saturated_into(),

@@ -526,6 +526,8 @@ impl<T: Config> Pallet<T> {
 		let transaction_hash = transaction.hash();
 		let transaction_index = pending.len() as u32;
 
+		let is_free = Self::is_free_call(&source, &transaction);
+
 		let (reason, status, used_gas, dest) = match info {
 			CallOrCreateInfo::Call(info) => (
 				info.exit_reason,
@@ -612,7 +614,10 @@ impl<T: Config> Pallet<T> {
 			exit_reason: reason,
 		});
 		
-		<T as pallet_evm::Config>::FreeCalls::on_sent_free_call(&source);
+		if is_free {
+			<T as pallet_evm::Config>::FreeCalls::on_sent_free_call(&source);
+		}
+
 		Ok(PostDispatchInfo {
 			actual_weight: Some(T::GasWeightMapping::gas_to_weight(
 				used_gas.unique_saturated_into(),
@@ -712,6 +717,7 @@ impl<T: Config> Pallet<T> {
 					access_list,
 					is_transactional,
 					validate,
+					false, // is_free has meaning only in context of validation
 					config.as_ref().unwrap_or_else(|| T::config()),
 				) {
 					Ok(res) => res,
