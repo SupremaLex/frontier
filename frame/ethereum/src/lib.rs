@@ -496,7 +496,6 @@ impl<T: Config> Pallet<T> {
 				.unique_saturated_into(),
 			// Unreachable because already validated. Gracefully handle.
 			_ => return {
-				panic!("InvalidTransaction::Payment");
 				Err(InvalidTransaction::Payment.into())
 			}
 		};
@@ -889,14 +888,12 @@ impl From<InvalidEvmTransactionError> for InvalidTransactionWrapper {
 				InvalidTransaction::Custom(TransactionValidationError::GasLimitTooHigh as u8),
 			),
 			InvalidEvmTransactionError::GasPriceTooLow => {
-				panic!("InvalidEvmTransactionError::GasPriceTooLow");
 				InvalidTransactionWrapper(InvalidTransaction::Payment)
 			}
 			InvalidEvmTransactionError::PriorityFeeTooHigh => InvalidTransactionWrapper(
 				InvalidTransaction::Custom(TransactionValidationError::MaxFeePerGasTooLow as u8),
 			),
 			InvalidEvmTransactionError::BalanceTooLow => {
-				panic!("InvalidEvmTransactionError::BalanceTooLow");
 				InvalidTransactionWrapper(InvalidTransaction::Payment)
 			}
 			InvalidEvmTransactionError::TxNonceTooLow => {
@@ -906,7 +903,6 @@ impl From<InvalidEvmTransactionError> for InvalidTransactionWrapper {
 				InvalidTransactionWrapper(InvalidTransaction::Future)
 			}
 			InvalidEvmTransactionError::InvalidPaymentInput => {
-				panic!("InvalidEvmTransactionError::InvalidPaymentInput");
 				InvalidTransactionWrapper(InvalidTransaction::Payment)
 			}
 			InvalidEvmTransactionError::InvalidChainId => InvalidTransactionWrapper(
