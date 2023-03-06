@@ -107,9 +107,6 @@ impl<'config, E: From<InvalidEvmTransactionError>> CheckEvmTransaction<'config, 
 		let (gas_price, _) = self.transaction_fee_input()?;
 		if self.config.is_transactional || gas_price > U256::zero() {
 			// Transaction max fee is at least the current base fee.
-			if !self.config.base_fee.is_zero() {
-				panic!("base_fee should be zero");
-			}
 			if gas_price < self.config.base_fee {
 				return Err(InvalidEvmTransactionError::GasPriceTooLow.into());
 			}
